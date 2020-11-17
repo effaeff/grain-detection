@@ -1,0 +1,9 @@
+##### Core scientific packages
+matplotlib==3.1.2
+numpy==1.18.1
+
+# Efficient jobs (caching, parallelism, persistence)
+joblib==0.14.1
+
+# tqdm displays nice progress bars, ipywidgets for tqdm's notebook support
+tqdm==4.42.0

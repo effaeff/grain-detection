@@ -1,0 +1,14 @@
+.vscode/
+.vim/
+*__pycache__/
+data/
+auto/
+output/
+*~
+*.png
+*.npy
+*.fls
+*.spl
+models/
+results/
+figures/
