@@ -1,6 +1,7 @@
 """Trainer class for grain segmentation"""
 
 import numpy as np
+from tqdm import tqdm
 
 from pytorchutils.globals import torch, DEVICE
 from pytorchutils.basic_trainer import BasicTrainer
@@ -21,7 +22,7 @@ class Trainer(BasicTrainer):
                 "Error: No nb_batches_fn defined in preprocessor. "
                 "This attribute is required by the training routine."
             )
-        for batch in batches:
+        for batch in tqdm(batches):
             inp = batch['F']
             out = batch['T']
 
@@ -59,10 +60,7 @@ class Trainer(BasicTrainer):
             else:
                 self.model.eval()
 
-            print(np.shape(inp))
-
             pred_out = self.model(inp.to(DEVICE))
             pred_out = torch.sigmoid(pred_out)
 
-            # RMSE is the default accuracy metric
             return pred_out

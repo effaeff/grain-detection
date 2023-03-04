@@ -22,7 +22,6 @@ from sklearn.model_selection import train_test_split
 
 from graindetection.dataaugmentor import augment_images
 
-
 def onehot(data, n):
     buf = np.zeros(data.shape + (n, ))
     nmsk = np.arange(data.size)*n + data.ravel()
@@ -32,35 +31,54 @@ def onehot(data, n):
 class GrainDataset(torch.utils.data.Dataset):
     """PyTorch Dataset to store grain data"""
     def __init__(self, path_features, path_target=None):
-        self.data_features = dset.ImageFolder(
-            root=path_features,
-            transform=Compose([
-                ToTensor(),
-                Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-            ])
+        # self.data_features = dset.ImageFolder(
+            # root=path_features,
+            # transform=Compose([
+                # ToTensor(),
+                # Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            # ])
+        # )
+        f_names = sorted(
+            os.listdir(f'{path_features}/1'), key=lambda name: int(os.path.splitext(name)[0])
         )
+        self.data_features = np.array([
+            np.load(f'{path_features}/1/{f_name}')
+            for f_name in f_names
+        ])
+
         self.data_targets = None
         if path_target is not None:
-            self.data_targets = dset.ImageFolder(
-                root=path_target,
-                transform=Grayscale(num_output_channels=1)
+            t_names = sorted(
+                os.listdir(f'{path_target}/1'), key=lambda name: int(os.path.splitext(name)[0])
             )
+            self.data_targets = np.array([
+                np.load(f'{path_target}/1/{t_name}')
+                for t_name in t_names
+            ])
+            # self.data_targets = dset.ImageFolder(
+                # root=path_target,
+                # transform=Grayscale(num_output_channels=1)
+            # )
 
     def __getitem__(self, index):
-        features, __ = self.data_features[index]
+        # features, __ = self.data_features[index]
+        features = torch.from_numpy(self.data_features[index]).float()
 
         targets = []
         if self.data_targets is not None:
-            targets, __ = self.data_targets[index]
-            targets = np.array(targets)
-            targets = (targets - np.min(targets)) / np.ptp(targets)
+            # targets, __ = self.data_targets[index]
+            # targets = np.array(targets)
+            # targets = (targets - np.min(targets)) / np.ptp(targets)
 
-            targets = targets.astype('uint8')
-            targets = onehot(targets, 2)
-            targets = targets.swapaxes(0, 2).swapaxes(1, 2)
-            targets = torch.FloatTensor(targets)
+            # targets = targets.astype('uint8')
+            # targets = onehot(targets, 2)
+            # targets = targets.swapaxes(0, 2).swapaxes(1, 2)
+            # targets = torch.FloatTensor(targets)
 
-            # targets = nn.functional.one_hot(torch.LongTensor(targets)).permute(2, 0, 1).float()
+            targets = self.data_targets[index]
+            targets = nn.functional.one_hot(
+                torch.LongTensor(targets)
+            ).permute(2, 0, 1).float()
 
         item = {'F': features, 'T': targets}
         return item
@@ -79,10 +97,11 @@ class DataProcessor():
         self.data_dir = self.config['data_dir']
         self.processed_dir = self.config['processed_dir']
         self.results_dir = self.config['results_dir']
-        self.data_lbls = self.config['data_labels']
+        self.data_types = self.config['data_types']
+        self.data_labels = self.config['data_labels']
         self.cscales = [
             matplotlib.cm.get_cmap(cscale_lbl)
-            for cscale_lbl in self.config.get('colorscales', ['viridis' for __ in self.data_lbls])
+            for cscale_lbl in self.config.get('colorscales', ['viridis' for __ in self.data_types])
         ]
         # Augmentation properties
         self.orig_size = self.config.get('orig_size', 1.0)
@@ -95,8 +114,8 @@ class DataProcessor():
     def process(self):
         """Method for processing raw data into train and test data"""
         filenames = [
-            [file for file in os.listdir(self.data_dir) if file.endswith(f'{label}.txt')]
-            for label in self.data_lbls
+            [file for file in os.listdir(self.data_dir) if file.endswith(f'{type}.txt')]
+            for type in self.data_types
         ]
 
         # Sort measurements numerically
@@ -124,7 +143,7 @@ class DataProcessor():
 
         for train_test in tuple(zip([train_files, test_files], ['train', 'test'])):
             if not any(
-                Path(f'{self.processed_dir}/{train_test[1]}/{self.data_lbls[0]}/1').iterdir()
+                Path(f'{self.processed_dir}/{train_test[1]}/{self.data_labels[-1]}/1').iterdir()
             ):
                 self.data_to_images(
                     train_test[0],
@@ -133,12 +152,12 @@ class DataProcessor():
                 )
 
         train_dataset = GrainDataset(
-            f'{self.processed_dir}/train/{self.data_lbls[0]}',
-            f'{self.processed_dir}/train/{self.data_lbls[1]}'
+            f'{self.processed_dir}/train/{self.data_labels[0]}',
+            f'{self.processed_dir}/train/{self.data_labels[1]}'
         )
         test_dataset = GrainDataset(
-            f'{self.processed_dir}/test/{self.data_lbls[0]}',
-            f'{self.processed_dir}/test/{self.data_lbls[1]}'
+            f'{self.processed_dir}/test/{self.data_labels[0]}',
+            f'{self.processed_dir}/test/{self.data_labels[1]}'
         )
 
         self.train_data = DataLoader(train_dataset, self.batch_size, shuffle=True, num_workers=0)
@@ -151,16 +170,21 @@ class DataProcessor():
             print(f"Processing files: {measurements}")
             # data = np.load(f'{from_dir}/{measurements}')
             # data = np.nan_to_num(data['data'])
-            data = [
+            data = np.moveaxis([
                 np.loadtxt(
                     f'{from_dir}/{filename}',
                     delimiter=self.config['delimiter']
                 )
                 for filename in measurements
-            ]
-            data = (data - np.min(data)) / np.ptp(data)
-            data = np.squeeze(data)
-            data = np.pad(data, ((0, 1), (0, 0)), mode='edge')
+            ], 0, -1) # (H, W, C)
+
+
+
+            ### Ines data test###
+            # data = (data - np.min(data)) / np.ptp(data)
+            # data = np.squeeze(data)
+            # data = np.pad(data, ((0, 1), (0, 0)), mode='edge')
+            #####################
 
             self.sample_subimages(
                 data,
@@ -172,24 +196,28 @@ class DataProcessor():
         samples = np.asarray(samples)
 
         for idx, sample in enumerate(samples):
+            sample = np.moveaxis(sample, -1, 0) # (C, H, W)
+            np.save(f'{to_dir}/{self.data_labels[0]}/1/{idx:03d}.npy', sample[:2, :, :])
+            np.save(f'{to_dir}/{self.data_labels[1]}/1/{idx:03d}.npy', sample[2, :, :])
             # for im_idx, image in enumerate(sample):
-            im_to_save = Image.fromarray(np.uint8(self.cscales[0](sample) * 255))
-            im_to_save.save(
-                '{}/{}/1/{}_sample_{:03d}.png'.format(
-                    to_dir,
-                    self.data_lbls[0],
-                    self.data_lbls[0],
-                    idx
-                )
-            )
+            # im_to_save = Image.fromarray(np.uint8(self.cscales[0](sample) * 255))
+            # im_to_save.save(
+                # '{}/{}/1/{}_sample_{:03d}.png'.format(
+                    # to_dir,
+                    # self.data_labels[0],
+                    # self.data_labels[0],
+                    # idx
+                # )
+            # )
 
     def sample_subimages(self, data, result, height, width, random_sample=False):
         """Method for reading grain measurements"""
         # orig_height = np.min([np.shape(image)[0] for image in data])
         # orig_width = np.min([np.shape(image)[1] for image in data])
-        print(np.shape(data))
+        # print(np.shape(data))
         orig_height = np.shape(data)[0]
         orig_width = np.shape(data)[1]
+
         n_samples = (
             self.config['n_samples'] if random_sample else
             int(orig_height / height) * int(orig_width / width)
@@ -231,24 +259,23 @@ class DataProcessor():
 
             for image_idx, image in enumerate(pred_out):
                 inp_image = inp[image_idx].permute(1, 2, 0)
-                inp_image = (inp_image - inp_image.min()) / (inp_image.max() - inp_image.min())
+                # inp_image = (inp_image - inp_image.min()) / (inp_image.max() - inp_image.min())
                 out_image = torch.argmax(out[image_idx], dim=0)
                 pred_out_image = torch.argmax(image, dim=0).cpu()
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
-                # acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
-                acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+                acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
+                # acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
 
-                save_idx = batch_idx * self.batch_size + image_idx
                 # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
                 # im_to_save.save(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png')
-                plt.imsave(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png', pred_out_image, cmap='Greys')
-                # self.plot_results(
-                    # [inp_image, pred_out_image, out_image],
-                    # ['Input', 'Output', 'Target'],
-                    # f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
-                # )
+                # plt.imsave(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png', pred_out_image, cmap='Greys')
+                self.plot_results(
+                    [inp_image[:, :, 0], inp_image[:, :, 1], pred_out_image, out_image],
+                    ['Depth', 'Intensity', 'Prediction', 'Target'],
+                    f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
+                )
 
         return np.mean(acc), np.std(acc)
 
@@ -257,8 +284,8 @@ class DataProcessor():
         Path('{}/predictions'.format(infer_dir[0])).mkdir(parents=True, exist_ok=True)
 
         # filenames = [
-            # [file for file in os.listdir(infer_dir[0]) if file.endswith(f'{label}.txt')]
-            # for label in self.data_lbls
+            # [file for file in os.listdir(infer_dir[0]) if file.endswith(f'{type}.txt')]
+            # for type in self.data_types
         # ]
 
         # Sort measurements numerically
@@ -272,15 +299,15 @@ class DataProcessor():
 
         print(f"Performing inference using files:\n{filenames}")
 
-        if not any(Path(f'{infer_dir[0]}/test/{self.data_lbls[0]}/1').iterdir()):
+        if not any(Path(f'{infer_dir[0]}/test/{self.data_labels[0]}/1').iterdir()):
             self.data_to_images(filenames, infer_dir[0], f'{infer_dir[0]}/test')
             # self.data_to_images(np.transpose(filenames), infer_dir[0], f'{infer_dir[0]}/test')
 
-        target_available = any(Path(f'{infer_dir[0]}/test/{self.data_lbls[-1]}/1').iterdir())
+        target_available = any(Path(f'{infer_dir[0]}/test/{self.data_types[-1]}/1').iterdir())
 
         infer_dataset = GrainDataset(
-            f'{infer_dir[0]}/test/{self.data_lbls[0]}',
-            f'{infer_dir[0]}/test/{self.data_lbls[-1]}' if target_available else None
+            f'{infer_dir[0]}/test/{self.data_labels[0]}',
+            f'{infer_dir[0]}/test/{self.data_labels[-1]}' if target_available else None
         )
         infer_data = DataLoader(infer_dataset, self.batch_size, shuffle=False, num_workers=0)
 
@@ -356,7 +383,7 @@ class DataProcessor():
         """Plot prediction results"""
         __, axs = plt.subplots(1, len(data), sharey=True)
         for idx, image in enumerate(data):
-            axs[idx].imshow(image)
+            axs[idx].imshow(image, cmap='inferno')
             axs[idx].set_title(titles[idx])
         plt.savefig(
             filename,

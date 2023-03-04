@@ -39,8 +39,8 @@ def main():
     trainer.get_batches_fn = data_processor.get_batches
     # acc = trainer.validate(101)
     # print(f"Validation accuracy: {acc}")
-    # trainer.train(validate_every=1, save_every=1)
-    trainer.infer(INFER_DIR)
+    trainer.train(validate_every=5, save_every=5)
+    # trainer.infer(INFER_DIR)
 
 if __name__ == '__main__':
     misc.to_local_dir(__file__)
