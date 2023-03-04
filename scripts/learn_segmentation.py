@@ -1,46 +1,46 @@
 """Main script for running the segmentation learning task"""
-import os
+
+import shutil
 import misc
 
-from pytorchutils.fcn8s import FCNModel
+from pytorchutils.fcn8s import FCNModel as VGGModel
+# from pytorchutils.fcn_resnet import FCNModel as ResNet
 from graindetection.dataprocessor import DataProcessor
 from graindetection.trainer import Trainer
 
+from config import (
+    DATA_DIR,
+    PROCESSED_DIR,
+    RESULTS_DIR,
+    MODELS_DIR,
+    INFER_DIR,
+    DATA_LABELS,
+    PROCESSED_DIR,
+    data_config,
+    model_config,
+    INFER_DIR
+)
+
+
 def main():
     """Main method"""
-    data_dir = '../data/01_raw'
-    interim_dir = '../data/02_interim'
-    processed_dir = '../data/03_processed'
-    results_dir = '../results'
-    data_config = {
-        'data_dir': data_dir,
-        'interim_dir': interim_dir,
-        'processed_dir': processed_dir,
-        'processed_dim': [512, 512],
-        'data_labels': ['depth', 'target'],
-        'delimiter': '\t',
-        'used_data': 0.6, # Percentage of used original data measurements
-        'random_seed': 1234,
-        'batch_size': 4,
-        'test_size': 0.2
-    }
-    model_config = {
-        'results_dir': results_dir,
-        'output_size': 2,
-        'arch': 'vgg16',
-        'loss': 'BCELoss',
-        'max_iter': 100,
-        'learning_rate': 0.01,
-        'pretrained': True
-    }
 
-    misc.gen_dirs([data_dir, interim_dir, processed_dir, results_dir])
+    # shutil.rmtree(PROCESSED_DIR, ignore_errors=True)
+    misc.gen_dirs(
+        [DATA_DIR, RESULTS_DIR, MODELS_DIR] +
+        [f'{INFER_DIR}/test/{data_lbl}/1' for data_lbl in DATA_LABELS] +
+        [f'{PROCESSED_DIR}/train/{data_lbl}/1' for data_lbl in DATA_LABELS] +
+        [f'{PROCESSED_DIR}/test/{data_lbl}/1' for data_lbl in DATA_LABELS]
+    )
 
     data_processor = DataProcessor(data_config)
-    # model = FCNModel(model_config)
-    # trainer = Trainer(model_config, model, data_processor)
-    # trainer.get_batches_fn = data_processor.get_batches
-    # trainer.train(validate_every=5, save_every=1)
+    model = VGGModel(model_config)
+    trainer = Trainer(model_config, model, data_processor)
+    trainer.get_batches_fn = data_processor.get_batches
+    # acc = trainer.validate(101)
+    # print(f"Validation accuracy: {acc}")
+    # trainer.train(validate_every=1, save_every=1)
+    trainer.infer(INFER_DIR)
 
 if __name__ == '__main__':
     misc.to_local_dir(__file__)
