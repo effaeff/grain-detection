@@ -3,7 +3,7 @@
 import shutil
 import misc
 
-from pytorchutils.fcn8s import FCNModel as VGGModel
+from pytorchutils.ahg import AHGModel as VGGModel
 # from pytorchutils.fcn_resnet import FCNModel as ResNet
 from graindetection.dataprocessor import DataProcessor
 from graindetection.trainer import Trainer
@@ -39,7 +39,7 @@ def main():
     trainer.get_batches_fn = data_processor.get_batches
     # acc = trainer.validate(101)
     # print(f"Validation accuracy: {acc}")
-    trainer.train(validate_every=5, save_every=5)
+    trainer.train(validate_every=1, save_every=1)
     # trainer.infer(INFER_DIR)
 
 if __name__ == '__main__':

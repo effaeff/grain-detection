@@ -38,19 +38,18 @@ class GrainDataset(torch.utils.data.Dataset):
                 # Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             # ])
         # )
-        f_names = sorted(
-            os.listdir(f'{path_features}/1'), key=lambda name: int(os.path.splitext(name)[0])
-        )
-        self.data_features = np.array([
-            np.load(f'{path_features}/1/{f_name}')
-            for f_name in f_names
-        ])
-
         self.data_targets = None
         if path_target is not None:
             t_names = sorted(
                 os.listdir(f'{path_target}/1'), key=lambda name: int(os.path.splitext(name)[0])
             )
+            t_names = [
+                t_name for t_name in t_names
+                if (
+                    not np.all(np.load(f'{path_target}/1/{t_name}')==0) and
+                    not np.all(np.load(f'{path_target}/1/{t_name}')==1)
+                )
+            ]
             self.data_targets = np.array([
                 np.load(f'{path_target}/1/{t_name}')
                 for t_name in t_names
@@ -59,6 +58,18 @@ class GrainDataset(torch.utils.data.Dataset):
                 # root=path_target,
                 # transform=Grayscale(num_output_channels=1)
             # )
+
+        f_names = sorted(
+            os.listdir(f'{path_target}/1'), key=lambda name: int(os.path.splitext(name)[0])
+        )
+        if path_target is not None and len(f_names) != len(t_names):
+            f_names = t_names
+
+        self.data_features = np.array([
+            np.load(f'{path_features}/1/{f_name}')
+            for f_name in f_names
+        ])
+
 
     def __getitem__(self, index):
         # features, __ = self.data_features[index]
@@ -277,7 +288,7 @@ class DataProcessor():
                     f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
                 )
 
-        return np.mean(acc), np.std(acc)
+        return 100.0 - np.mean(acc), np.std(acc)
 
     def infer(self, evaluate, infer_dir):
         """Inference method"""

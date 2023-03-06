@@ -13,7 +13,7 @@ DATA_LABELS = ['features', 'target']
 data_config = {
     'data_dir': DATA_DIR,
     'processed_dir': PROCESSED_DIR,
-    'processed_dim': [512, 512],
+    'processed_dim': [128, 128],
     'results_dir': RESULTS_DIR,
     'data_types': DATA_TYPES,
     'data_labels': DATA_LABELS,
@@ -24,11 +24,13 @@ data_config = {
     'n_samples': 40, # Number of randomly extracted sub-images per measurement
     'orig_size': 0.02, # Portion of original data in augmented dataset
     'random_seed': 4321,
-    'batch_size': 8,
+    'batch_size': 2,
     'test_size': 1 # Number of measurements
 }
 model_config = {
     'models_dir': MODELS_DIR,
+    'n_patches': (32, 32),
+    'embedding_size': 128,
     'n_channels': 2,
     'output_size': 2,
     'arch': 'vgg16',
@@ -37,7 +39,7 @@ model_config = {
     'optimizer': 'Adam',
     'loss': 'BCELoss',
     'max_iter': 51,
-    'learning_rate': 1e-3,
+    'learning_rate': 1e-2,
     'optim_betas': [0.0, 0.999],
     # 'reg_lambda': 1e-5,
     'pretrained': True
