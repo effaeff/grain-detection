@@ -3,6 +3,7 @@
 import re
 import os
 import random
+from tqdm import tqdm
 from pathlib import Path
 
 import cv2
@@ -263,7 +264,7 @@ class DataProcessor():
         ).mkdir(parents=True, exist_ok=True)
 
         acc = []
-        for batch_idx, batch in enumerate(self.test_data):
+        for batch_idx, batch in enumerate(tqdm(self.test_data)):
             inp = batch['F']
             out = batch['T']
             pred_out = evaluate(inp)
