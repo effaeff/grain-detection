@@ -19,15 +19,8 @@ from pytorchutils.globals import torch
 from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor, Grayscale, Normalize, Compose
+from torchmetrics import JaccardIndex
 from sklearn.model_selection import train_test_split
-
-from graindetection.dataaugmentor import augment_images
-
-def onehot(data, n):
-    buf = np.zeros(data.shape + (n, ))
-    nmsk = np.arange(data.size)*n + data.ravel()
-    buf.ravel()[nmsk-1] = 1
-    return buf
 
 class GrainDataset(torch.utils.data.Dataset):
     """PyTorch Dataset to store grain data"""
@@ -263,7 +256,10 @@ class DataProcessor():
             '{}/epoch{}'.format(self.results_dir, epoch_idx)
         ).mkdir(parents=True, exist_ok=True)
 
-        acc = []
+        pixel_acc = []
+        border_acc = []
+        iou = []
+        jacc = JaccardIndex(num_classes=self.output_size, task='multiclass')
         for batch_idx, batch in enumerate(tqdm(self.test_data)):
             inp = batch['F']
             out = batch['T']
@@ -277,8 +273,9 @@ class DataProcessor():
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
-                acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
-                # acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+                # pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
+                iou.append(jacc(pred_out_image, out_image))
+                # border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
 
                 # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
                 # im_to_save.save(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png')
@@ -289,7 +286,12 @@ class DataProcessor():
                     f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
                 )
 
-        return 100.0 - np.mean(acc), np.std(acc)
+        # return 100.0 - np.mean(pixel_acc), np.std(pixel_acc)
+        # return (
+            # [np.mean(iou), np.mean(pixel_acc), np.mean(border_acc)],
+            # [np.std(iou), np.std(pixel_acc), np.std(border_acc)]
+        # )
+        return np.mean(iou), np.std(iou)
 
     def infer(self, evaluate, infer_dir):
         """Inference method"""
@@ -359,28 +361,25 @@ class DataProcessor():
 
     def calc_border_acc(self, target, output, idx=0):
         target = [np.argmax(target.cpu().detach().numpy(), axis = 0)]
-        target = np.reshape(target, (512,512))
+        target = np.reshape(target, (self.height, self.width))
+        plt.imsave('target.png', target)
         target = target.flatten()
-        plt.imsave('target.png', np.reshape(target, (512,512)))
 
         img = cv2.imread('target.png')
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        img_gray = np.where(img_gray >130, 30, 215)
+        img_gray = np.where(img_gray > 130, 30, 215)
         img_gray = img_gray.astype(np.uint8)
         ret, thresh = cv2.threshold(img_gray, 170, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
         contours, hierarchy = cv2.findContours(thresh, 2, 1)
         bmask = np.ones(img.shape[:2], dtype="uint8")
-        #cv2.drawContours(bmask, contours, -1, 0, 15)
-        cv2.drawContours(bmask, contours, -1, 0, 15)
-        #plt.imsave('{}bmask.png'.format(i), bmask, cmap='gray')
+        cv2.drawContours(bmask, contours, -1, 0, 8)
 
         bsave = Image.fromarray(np.uint8(bmask * 255))
         bsave.save(f"border_{idx}.png")
 
         bmask = bmask.flatten()
         output = [np.argmax(output.cpu().detach().numpy(), axis = 0)]
-        #plt.imsave('{}output.png'.format(i), np.reshape(output, (512,512)))
-        pred = np.reshape(output, (512,512))
+        pred = np.reshape(output, (self.height, self.width))
         pred = pred.flatten()
 
         pred_masked = np.ma.masked_where(bmask==1, pred)

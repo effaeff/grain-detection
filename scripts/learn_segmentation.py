@@ -38,9 +38,10 @@ def main():
     data_processor = DataProcessor(data_config)
     model = AHG(model_config)
     # model = ResNet(model_config)
+    model.eval()
     trainer = Trainer(model_config, model, data_processor)
     trainer.get_batches_fn = data_processor.get_batches
-    # acc = trainer.validate(201)
+    # acc = trainer.validate(130)
     # print(f"Validation accuracy: {acc}")
     trainer.train(validate_every=5, save_every=5)
     # trainer.infer(INFER_DIR)

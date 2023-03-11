@@ -40,8 +40,9 @@ model_config = {
     'init_layers': (nn.ConvTranspose2d),
     'optimizer': 'Adam',
     'loss': 'BCELoss',
+    # 'loss': 'BinaryDiceLoss',
     'max_iter': 401,
-    'learning_rate': 1e-4,
+    'learning_rate': 1e-3,
     'optim_betas': [0.0, 0.999],
     'reg_lambda': 1e-5,
     'pretrained': True
