@@ -20,7 +20,7 @@ def main():
 
     data_processor = DataProcessor(data_config)
 
-    total_dirs = glob(f'{MODELS_DIR}/ahg-vgg4-sum/')
+    total_dirs = glob(f'{MODELS_DIR}/ahg-vgg-sum-bloss/')
     # total_dirs.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-1]).group()))
 
     for directory in total_dirs:
