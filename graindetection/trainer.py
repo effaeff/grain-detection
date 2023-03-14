@@ -22,21 +22,37 @@ class Trainer(BasicTrainer):
                 "Error: No nb_batches_fn defined in preprocessor. "
                 "This attribute is required by the training routine."
             )
-        for batch in tqdm(batches):
+        for batch_idx, batch in enumerate(tqdm(batches)):
             inp = batch['F']
             out = batch['T']
 
             pred_out = self.model(inp.to(DEVICE))
             pred_out = torch.sigmoid(pred_out)
 
+            out_border = torch.empty(
+                (out.size()[0], out.size()[-2] * out.size()[-1]),
+                dtype=torch.float32
+            )
+            pred_border = torch.empty(
+                (out.size()[0], out.size()[-2] * out.size()[-1]),
+                dtype=torch.float32
+            )
+            for idx, image in enumerate(out):
+                target_masked, pred_masked = self.preprocessor.find_border_pxl(
+                    image,
+                    pred_out[idx],
+                    batch_idx * len(batch) + idx
+                )
+                out_border[idx] = torch.from_numpy(target_masked).float()
+                pred_border[idx] = torch.from_numpy(pred_masked).float()
+
             batch_loss = self.loss(
                 pred_out,
                 out.to(DEVICE)
+            ) + self.loss(
+                pred_border.to(DEVICE),
+                out_border.to(DEVICE)
             )
-            # ) + 10 * np.mean([
-                # 1 - self.preprocessor.calc_border_acc(out[idx], pred_out[idx])
-                # for idx, __ in enumerate(pred_out)
-            # ])
 
             self.optimizer.zero_grad()
             batch_loss.backward()
