@@ -156,17 +156,17 @@ class DataProcessor():
                     f'{self.processed_dir}/{train_test[1]}'
                 )
 
-        train_dataset = GrainDataset(
+        self.train_dataset = GrainDataset(
             f'{self.processed_dir}/train/{self.data_labels[0]}',
             f'{self.processed_dir}/train/{self.data_labels[1]}'
         )
-        test_dataset = GrainDataset(
+        self.test_dataset = GrainDataset(
             f'{self.processed_dir}/test/{self.data_labels[0]}',
             f'{self.processed_dir}/test/{self.data_labels[1]}'
         )
 
-        self.train_data = DataLoader(train_dataset, self.batch_size, shuffle=True, num_workers=0)
-        self.test_data = DataLoader(test_dataset, self.batch_size, shuffle=False, num_workers=0)
+        self.train_data = DataLoader(self.train_dataset, self.batch_size, shuffle=True, num_workers=0)
+        self.test_data = DataLoader(self.test_dataset, self.batch_size, shuffle=False, num_workers=0)
 
     def data_to_images(self, filenames, from_dir, to_dir):
         """Process data files to images"""
@@ -248,6 +248,10 @@ class DataProcessor():
         """Method to pass batches to trainer"""
         return self.train_data
 
+    def get_datasets(self):
+        """Method to get datasets"""
+        return self.train_dataset, self.test_dataset
+
     def validate(self, evaluate, epoch_idx):
         """Validation method which uses evaluation method from trainer"""
         print("Start validation...")
@@ -273,25 +277,29 @@ class DataProcessor():
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
-                # pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
+                pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
                 iou.append(jacc(pred_out_image, out_image))
-                # border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+                border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
 
                 # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
                 # im_to_save.save(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png')
-                # plt.imsave(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png', pred_out_image, cmap='Greys')
-                self.plot_results(
-                    [inp_image[:, :, 0], inp_image[:, :, 1], pred_out_image, out_image],
-                    ['Depth', 'Intensity', 'Prediction', 'Target'],
-                    f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
-                )
+                # plt.imsave(
+                    # f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png',
+                    # pred_out_image,
+                    # cmap='Greys'
+                # )
+                # self.plot_results(
+                    # [inp_image[:, :, 0], inp_image[:, :, 1], pred_out_image, out_image],
+                    # ['Depth', 'Intensity', 'Prediction', 'Target'],
+                    # f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
+                # )
 
         # return 100.0 - np.mean(pixel_acc), np.std(pixel_acc)
-        # return (
-            # [np.mean(iou), np.mean(pixel_acc), np.mean(border_acc)],
-            # [np.std(iou), np.std(pixel_acc), np.std(border_acc)]
-        # )
-        return np.mean(iou), np.std(iou)
+        return (
+            [np.mean(iou), np.mean(pixel_acc), np.mean(border_acc)],
+            [np.std(iou), np.std(pixel_acc), np.std(border_acc)]
+        )
+        # return np.mean(iou), np.std(iou)
 
     def infer(self, evaluate, infer_dir):
         """Inference method"""
@@ -359,7 +367,7 @@ class DataProcessor():
             print(f"Accuracy: {np.mean(acc)} +- {np.std(acc)}")
             print(f"Boundary accuracy: {np.mean(bacc)} +- {np.std(bacc)}")
 
-    def calc_border_acc(self, target, output, idx=0):
+    def find_border_pxl(self, target, output, idx=0):
         target = [np.argmax(target.cpu().detach().numpy(), axis = 0)]
         target = np.reshape(target, (self.height, self.width))
         plt.imsave('target.png', target)
@@ -375,7 +383,7 @@ class DataProcessor():
         cv2.drawContours(bmask, contours, -1, 0, 8)
 
         bsave = Image.fromarray(np.uint8(bmask * 255))
-        bsave.save(f"border_{idx}.png")
+        # bsave.save(f"border_{idx}.png")
 
         bmask = bmask.flatten()
         output = [np.argmax(output.cpu().detach().numpy(), axis = 0)]
@@ -383,8 +391,14 @@ class DataProcessor():
         pred = pred.flatten()
 
         pred_masked = np.ma.masked_where(bmask==1, pred)
-        pred_masked = np.ma.compressed(pred_masked)
         target_masked = np.ma.masked_where(bmask==1, target)
+
+        return target_masked, pred_masked
+
+    def calc_border_acc(self, target, output, idx=0):
+        target_masked, pred_masked = self.find_border_pxl(target, output, idx)
+
+        pred_masked = np.ma.compressed(pred_masked)
         target_masked = np.ma.compressed(target_masked)
 
         loss = np.sum(pred_masked==target_masked) / len(pred_masked)
