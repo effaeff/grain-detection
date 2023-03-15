@@ -5,33 +5,42 @@ import os
 import random
 import numpy as np
 import imgaug as ia
+from glob import glob
 from tqdm import tqdm
 from imgaug import augmenters as iaa
 from matplotlib import pyplot as plt
 from sklearn.model_selection import train_test_split
 
+from pytorchutils.globals import torch, DEVICE
+from pytorchutils.ahg import AHGModel
+
 from config import (
     AUG_DIR,
-    data_config
+    data_config,
+    model_config
 )
 
 import misc
 
 def main():
     """Main Method"""
-    # img_for_rotation = 40 # Number of random picks for rotated augmentation
-    # rotational_augment_portion = 0.4 # Portion of rotated images of all augmented images
     original_data_percentage = 0.5
-    rotation_percentage = 0.5 # Portion of rotated images in augments
+    rotation_percentage = 1 # Portion of rotated images in augments
     sometimes_prob = 0.5
     random_seed = data_config.get('random_seed', 4321)
     data_dir = data_config['data_dir']
     processed_dir = data_config['processed_dir']
+    model_dir = model_config['models_dir']
     results_dir = data_config['results_dir']
     data_types = data_config['data_types']
     data_labels = data_config['data_labels']
     im_size = np.array(data_config['processed_dim'])
     rot_size = (im_size + im_size / 2).astype('int')
+
+    checkpoint = glob(f'{model_dir}/best/*Model*')[0]
+    model = AHGModel(model_config).to(DEVICE)
+    state = torch.load(checkpoint)
+    model.load_state_dict(state['state_dict'])
 
     ia.seed(random_seed)
     random.seed(random_seed)
@@ -47,13 +56,15 @@ def main():
         key=lambda x: int(re.search('\d+', x).group())
     )
 
-    raw_data = [
-        [fname for fname in os.listdir(data_dir) if fname.endswith(f'{type}.txt')]
+    raw_fnames = [
+        sorted([
+            fname for fname in os.listdir(data_dir) if fname.endswith(f'{type}.txt')
+        ], key=lambda x: int(re.search('\d+', x).group()))
         for type in data_types
     ]
-    test_size = data_config.get('test_size', 0.2) / len(np.transpose(raw_data))
+    test_size = data_config.get('test_size', 0.2) / len(np.transpose(raw_fnames))
     train_files, __ = train_test_split(
-        np.transpose(filenames),
+        np.transpose(raw_fnames),
         test_size=test_size,
         random_state=random_seed
     )
@@ -101,7 +112,6 @@ def main():
         f"Rotated augments: {rot_augments},\t"
         f"Non-rotated augments: {normal_augments}"
     )
-    print("Augmenting images...")
 
     # rand_fnames = [random.choice(filenames) for __ in range(normal_augments)]
 
@@ -116,20 +126,87 @@ def main():
 
     # features_aug, targets_aug = seq(images=features, segmentation_maps=targets)
 
-    # for idx, image in enumerate(features_aug):
-        # plt.imsave(f'{AUG_DIR}/{data_labels[0]}/{idx:05d}_aug.jpg', image)
-        # np.save(
-            # f'{AUG_DIR}/{data_labels[1]}/{idx:05d}_aug.npy',
-            # targets_aug[idx].squeeze()
-        # )
 
+    print("Load raw data...")
+    raw_data = [
+        np.moveaxis([
+            np.loadtxt(
+                f'{data_dir}/{filename}',
+                delimiter=data_config['delimiter']
+            )
+            for filename in train_file
+        ], 0, -1) # (H, W, C)
+        for train_file in tqdm(train_files)
+    ]
 
-    features_rot = np.empty((rot_augments, *rot_size, 3))
-    targets_rot = np.empty((rot_augments, *rot_size, 1))
+    print("Augmenting images...")
 
-    for idx in range(rot_augments):
-        raw_fname = random.choice(train_files)
+    features_aug, targets_aug = None, None
+    if normal_aug_factor > 0:
+        features, targets = get_rand_rgb(raw_data, model, normal_augments, im_size)
+        features_aug, targets_aug = seq(images=features, segmentation_maps=targets)
 
+    features_rot_aug, targets_rot_aug = None, None
+    if rot_augments > 0:
+        features_rot, targets_rot = get_rand_rgb(raw_data, model, rot_augments, rot_size)
+        seq.insert(0, iaa.Affine(rotate=(-90, 90)))
+        features_rot_aug, targets_rot_aug = seq(images=features_rot, segmentation_maps=targets_rot)
+        features_rot_aug = features_rot_aug[
+            :,
+            rot_size[0]//2 - im_size[0]//2:rot_size[0]//2 + im_size[0]//2,
+            rot_size[1]//2 - im_size[1]//2:rot_size[1]//2 + im_size[1]//2,
+            :
+        ]
+        targets_rot_aug = targets_rot_aug[
+            :,
+            rot_size[0]//2 - im_size[0]//2:rot_size[0]//2 + im_size[0]//2,
+            rot_size[1]//2 - im_size[1]//2:rot_size[1]//2 + im_size[1]//2
+        ]
+
+    features_comb = (
+        features_aug if features_aug is not None else
+        features_rot_aug if features_rot_aug is not None else
+        np.concatenate((features_aug, features_rot_aug))
+    )
+    targets_comb = (
+        targets_aug if targets_aug is not None else
+        targets_rot_aug if targets_rot_aug is not None else
+        np.concatenate((targets_aug, targets_rot_aug))
+    )
+
+    for idx, image in enumerate(features_comb):
+        plt.imsave(f'{AUG_DIR}/{data_labels[0]}/{idx:05d}_aug.jpg', image)
+        np.save(
+            f'{AUG_DIR}/{data_labels[1]}/{idx:05d}_aug.npy',
+            targets_comb[idx].squeeze()
+        )
+
+def get_rand_rgb(raw_data, model, n_augments, im_size):
+    """Get random rgb image using model evaluation with corresponding mask"""
+    features = np.empty((n_augments, *im_size, 3), dtype=np.uint8)
+    targets = np.empty((n_augments, *im_size, 1), dtype=np.int32)
+    print(f"Sampling {n_augments} images")
+    for idx in tqdm(range(n_augments)):
+        rand_raw = random.choice(raw_data)
+        sample_height = random.randint(0, rand_raw.shape[0] - im_size[0])
+        sample_width = random.randint(0, rand_raw.shape[1] - im_size[1])
+        rand_sample = rand_raw[
+            sample_height:sample_height + im_size[0],
+            sample_width:sample_width + im_size[1]
+        ]
+
+        rand_features = rand_sample[:, :, :model_config['n_channels']]
+        rand_features = torch.from_numpy(np.moveaxis(rand_features, -1, 0)).float().to(DEVICE)
+        features_rgb = model.inp2rgb(rand_features).detach().cpu().numpy()
+        features_rgb = (np.moveaxis(features_rgb, 0, -1) * 255).astype('uint8')
+
+        rand_targets = rand_sample[:, :, model_config['n_channels']]
+        rand_targets = np.reshape(rand_targets, (*rand_targets.shape, 1)).astype('int32')
+
+        features[idx] = features_rgb
+        targets[idx] = rand_targets
+
+    return features, targets
 
 if __name__ == "__main__":
     misc.to_local_dir(__file__)
