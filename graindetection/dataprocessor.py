@@ -208,8 +208,8 @@ class DataProcessor():
 
         for idx, sample in enumerate(samples):
             sample = np.moveaxis(sample, -1, 0) # (C, H, W)
-            np.save(f'{to_dir}/{self.data_labels[0]}/1/{idx:03d}.npy', sample[:2, :, :])
-            np.save(f'{to_dir}/{self.data_labels[1]}/1/{idx:03d}.npy', sample[2, :, :])
+            np.save(f'{to_dir}/{self.data_labels[0]}/1/{idx:04d}.npy', sample[:2, :, :])
+            np.save(f'{to_dir}/{self.data_labels[1]}/1/{idx:04d}.npy', sample[2, :, :])
             # for im_idx, image in enumerate(sample):
             # im_to_save = Image.fromarray(np.uint8(self.cscales[0](sample) * 255))
             # im_to_save.save(
