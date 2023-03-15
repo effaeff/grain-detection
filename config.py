@@ -13,7 +13,7 @@ DATA_LABELS = ['features', 'target']
 data_config = {
     'data_dir': DATA_DIR,
     'processed_dir': PROCESSED_DIR,
-    'processed_dim': [128, 128],
+    'processed_dim': [256, 256],
     'results_dir': RESULTS_DIR,
     'data_types': DATA_TYPES,
     'data_labels': DATA_LABELS,
@@ -24,7 +24,7 @@ data_config = {
     'n_samples': 40, # Number of randomly extracted sub-images per measurement
     'orig_size': 0.02, # Portion of original data in augmented dataset
     'random_seed': 4321,
-    'batch_size': 2,
+    'batch_size': 16,
     'test_size': 1 # Number of measurements
 }
 model_config = {
@@ -34,13 +34,16 @@ model_config = {
     'n_channels': 2,
     'output_size': 2,
     'arch': 'vgg16',
+    'vgg_bn': True,
+    # 'arch': 'fcn_resnet50',
     'init': 'xavier_uniform_',
     'init_layers': (nn.ConvTranspose2d),
     'optimizer': 'Adam',
     'loss': 'BCELoss',
-    'max_iter': 51,
-    'learning_rate': 1e-2,
+    # 'loss': 'BinaryDiceLoss',
+    'max_iter': 401,
+    'learning_rate': 1e-3,
     'optim_betas': [0.0, 0.999],
-    # 'reg_lambda': 1e-5,
+    'reg_lambda': 1e-5,
     'pretrained': True
 }
