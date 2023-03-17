@@ -7,6 +7,7 @@ PROCESSED_DIR = '../data/02_processed'
 RESULTS_DIR = '../results'
 MODELS_DIR = '../models'
 INFER_DIR = '../data/03_inference'
+AUG_DIR = '../data/04_augmentations'
 DATA_TYPES = ['depth', 'intensity', 'target']
 DATA_LABELS = ['features', 'target']
 

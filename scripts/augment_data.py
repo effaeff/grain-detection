@@ -52,7 +52,7 @@ def main():
     misc.gen_dirs([f'{AUG_DIR}/{data_labels[0]}', f'{AUG_DIR}/{data_labels[1]}'])
 
     filenames = sorted(
-        [filename for filename in os.listdir(feature_dir) if filename.endswith('jpg')],
+        [filename for filename in os.listdir(target_dir) if filename.endswith('.npy')],
         key=lambda x: int(re.search('\d+', x).group())
     )
 
@@ -181,7 +181,7 @@ def main():
             targets_comb[idx].squeeze()
         )
 
-def get_rand_rgb(raw_data, model, n_augments, im_size):
+def get_rand_rgb(raw_data, model, n_augments, im_size, use_model=False):
     """Get random rgb image using model evaluation with corresponding mask"""
     features = np.empty((n_augments, *im_size, 3), dtype=np.uint8)
     targets = np.empty((n_augments, *im_size, 1), dtype=np.int32)
@@ -196,9 +196,13 @@ def get_rand_rgb(raw_data, model, n_augments, im_size):
         ]
 
         rand_features = rand_sample[:, :, :model_config['n_channels']]
-        rand_features = torch.from_numpy(np.moveaxis(rand_features, -1, 0)).float().to(DEVICE)
-        features_rgb = model.inp2rgb(rand_features).detach().cpu().numpy()
-        features_rgb = (np.moveaxis(features_rgb, 0, -1) * 255).astype('uint8')
+
+        features_rgb = np.concatenate((rand_features, np.zeros((*im_size, 1))), axis=2)
+        if use_model:
+            rand_features = torch.from_numpy(np.moveaxis(rand_features, -1, 0)).float().to(DEVICE)
+            features_rgb = model.inp2rgb(rand_features).detach().cpu().numpy()
+            features_rgb = np.moveaxis(features_rgb, 0, -1)
+        features_rgb = (features_rgb * 255).astype('uint8')
 
         rand_targets = rand_sample[:, :, model_config['n_channels']]
         rand_targets = np.reshape(rand_targets, (*rand_targets.shape, 1)).astype('int32')
