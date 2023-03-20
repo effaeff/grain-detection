@@ -5,7 +5,7 @@ from glob import glob
 import numpy as np
 import misc
 
-from pytorchutils.globals import torch
+from pytorchutils.globals import torch, nn
 # from pytorchutils.fcn8s import FCNModel
 from pytorchutils.fcn_resnet import FCNModel
 from pytorchutils.ahg import AHGModel
@@ -20,20 +20,20 @@ def main():
 
     data_processor = DataProcessor(data_config)
 
-    total_dirs = glob(f'{MODELS_DIR}/ahg-vgg-sum-bloss/')
+    total_dirs = glob(f'{MODELS_DIR}/3fullattn/')
     # total_dirs.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-1]).group()))
 
     for directory in total_dirs:
         print(f"Processing model directory: {directory}")
         # n_measurements = int(re.search(r'\d+', directory.split('_')[-1]).group())
-        checkpoints = glob(f'{directory}*Model*')
+        checkpoints = glob(f'{directory}*DataParallel*')
         checkpoints.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-2]).group()))
 
         accuracies = np.zeros((len(checkpoints), 3))
         stds = np.zeros((len(checkpoints), 3))
         for idx, checkpoint in enumerate(checkpoints):
             epoch = int(re.search(r'\d+', checkpoint.split('_')[-2]).group())
-            model = AHGModel(model_config)
+            model = nn.DataParallel(AHGModel(model_config))
             # model = FCNModel(model_config)
             print(f"checkpoint file: {checkpoint}")
             state = torch.load(checkpoint)
