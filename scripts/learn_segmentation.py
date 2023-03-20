@@ -7,6 +7,7 @@ from pytorchutils.ahg import AHGModel as AHG
 from pytorchutils.fcn8s import FCNModel as FCN8s
 from pytorchutils.fcn_resnet import FCNModel as ResNet
 # from pytorchutils.fcn_resnet import FCNModel as ResNet
+from pytorchutils.globals import nn
 from graindetection.dataprocessor import DataProcessor
 from graindetection.trainer import Trainer
 
@@ -36,7 +37,7 @@ def main():
     )
 
     data_processor = DataProcessor(data_config)
-    model = AHG(model_config)
+    model = nn.DataParallel(AHG(model_config))
     # model = ResNet(model_config)
     model.eval()
     trainer = Trainer(model_config, model, data_processor)
