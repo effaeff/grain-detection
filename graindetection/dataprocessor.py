@@ -118,38 +118,39 @@ class DataProcessor():
 
     def process(self):
         """Method for processing raw data into train and test data"""
-        filenames = [
-            [file for file in os.listdir(self.data_dir) if file.endswith(f'{type}.txt')]
-            for type in self.data_types
-        ]
+        if not any(
+            Path(f'{self.processed_dir}/train/{self.data_labels[-1]}/1').iterdir()
+        ):
+            print(any(Path(f'{self.processed_dir}/train/{self.data_labels[-1]}/1').iterdir()))
+            filenames = [
+                [file for file in os.listdir(self.data_dir) if file.endswith(f'{type}.txt')]
+                for type in self.data_types
+            ]
 
-        # Sort measurements numerically
-        for type_idx, __ in enumerate(filenames):
-            filenames[type_idx].sort(key=lambda f: int(re.sub(r'\D', '', f)))
+            # Sort measurements numerically
+            for type_idx, __ in enumerate(filenames):
+                filenames[type_idx].sort(key=lambda f: int(re.sub(r'\D', '', f)))
 
-        # Do train/test-split
-        train_size = self.config.get('train_size', 1.0) / len(np.transpose(filenames))
-        test_size = self.config.get('test_size', 0.2) / len(np.transpose(filenames))
-        train_files, test_files = train_test_split(
-            np.transpose(filenames),
-            test_size=test_size,
-            random_state=self.random_seed
-        )
-
-        if train_size + test_size < 1.0:
-            train_files, __ = train_test_split(
-                train_files,
-                train_size=self.config['train_size'] / len(train_files),
+            # Do train/test-split
+            train_size = self.config.get('train_size', 1.0) / len(np.transpose(filenames))
+            test_size = self.config.get('test_size', 0.2) / len(np.transpose(filenames))
+            train_files, test_files = train_test_split(
+                np.transpose(filenames),
+                test_size=test_size,
                 random_state=self.random_seed
             )
 
-        print(f"Train files:\n{train_files}")
-        print(f"Test files:\n{test_files}")
+            if train_size + test_size < 1.0:
+                train_files, __ = train_test_split(
+                    train_files,
+                    train_size=self.config['train_size'] / len(train_files),
+                    random_state=self.random_seed
+                )
 
-        for train_test in tuple(zip([train_files, test_files], ['train', 'test'])):
-            if not any(
-                Path(f'{self.processed_dir}/{train_test[1]}/{self.data_labels[-1]}/1').iterdir()
-            ):
+            print(f"Train files:\n{train_files}")
+            print(f"Test files:\n{test_files}")
+
+            for train_test in tuple(zip([train_files, test_files], ['train', 'test'])):
                 self.data_to_images(
                     train_test[0],
                     self.data_dir,
@@ -277,9 +278,9 @@ class DataProcessor():
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
-                pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
+                #pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
                 iou.append(jacc(pred_out_image, out_image))
-                border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+                #border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
 
                 # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
                 # im_to_save.save(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png')
@@ -288,18 +289,18 @@ class DataProcessor():
                     # pred_out_image,
                     # cmap='Greys'
                 # )
-                # self.plot_results(
-                    # [inp_image[:, :, 0], inp_image[:, :, 1], pred_out_image, out_image],
-                    # ['Depth', 'Intensity', 'Prediction', 'Target'],
-                    # f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
-                # )
+                self.plot_results(
+                    [inp_image[:, :, 0], inp_image[:, :, 1], pred_out_image, out_image],
+                    ['Depth', 'Intensity', 'Prediction', 'Target'],
+                    f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
+                )
 
         # return 100.0 - np.mean(pixel_acc), np.std(pixel_acc)
-        return (
-            [np.mean(iou), np.mean(pixel_acc), np.mean(border_acc)],
-            [np.std(iou), np.std(pixel_acc), np.std(border_acc)]
-        )
-        # return np.mean(iou), np.std(iou)
+        #return (
+        #    [np.mean(iou), np.mean(pixel_acc), np.mean(border_acc)],
+        #    [np.std(iou), np.std(pixel_acc), np.std(border_acc)]
+        #)
+        return np.mean(iou), np.std(iou)
 
     def infer(self, evaluate, infer_dir):
         """Inference method"""
