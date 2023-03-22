@@ -3,6 +3,8 @@
 import numpy as np
 from tqdm import tqdm
 
+import cv2
+
 from pytorchutils.globals import torch, DEVICE
 from pytorchutils.basic_trainer import BasicTrainer
 
@@ -11,6 +13,7 @@ class Trainer(BasicTrainer):
     """Wrapper class for training routine"""
     def __init__(self, config, model, dataprocessor):
         BasicTrainer.__init__(self, config, model, dataprocessor)
+        torch.autograd.set_detect_anomaly(True)
 
     def learn_from_epoch(self):
         """Training method"""
@@ -26,31 +29,37 @@ class Trainer(BasicTrainer):
             inp = batch['F']
             out = batch['T']
 
-            pred_out = self.model(inp.to(DEVICE))
+            pred_out, pred_edges = self.model(inp.to(DEVICE))
             pred_out = torch.sigmoid(pred_out)
+            pred_edges = torch.sigmoid(pred_edges).squeeze()
 
             out_border = torch.empty(
-                (out.size()[0], out.size()[-2] * out.size()[-1]),
+                (out.size()[0], out.size()[-2], out.size()[-1]),
                 dtype=torch.float32
             )
-            pred_border = torch.empty(
-                (out.size()[0], out.size()[-2] * out.size()[-1]),
-                dtype=torch.float32
-            )
+            # pred_border = torch.empty(
+                # (out.size()[0], out.size()[-2] * out.size()[-1]),
+                # dtype=torch.float32
+            # )
             for idx, image in enumerate(out):
-                target_masked, pred_masked = self.preprocessor.find_border_pxl(
-                    image,
-                    pred_out[idx],
-                    batch_idx * len(batch) + idx
-                )
-                out_border[idx] = torch.from_numpy(target_masked).float()
-                pred_border[idx] = torch.from_numpy(pred_masked).float()
+                # target_masked, pred_masked = self.preprocessor.find_border_pxl(
+                    # image,
+                    # pred_out[idx],
+                    # batch_idx * len(batch) + idx
+                # )
+                # out_border[idx] = torch.from_numpy(target_masked).float()
+                # pred_border[idx] = torch.from_numpy(pred_masked).float()
+                target = [np.argmax(image.cpu().detach().numpy(), axis=0)]
+                target = np.reshape(target, (out.size()[-1], out.size()[-1]))
+                out_blur = cv2.GaussianBlur((target * 255).astype('uint8'), (5, 5), 0)
+                target_edges = cv2.Canny(out_blur, 100, 200) / 255
+                out_border[idx] = torch.from_numpy(target_edges).float()
 
             batch_loss = self.loss(
                 pred_out,
                 out.to(DEVICE)
             ) + self.loss(
-                pred_border.to(DEVICE),
+                pred_edges,
                 out_border.to(DEVICE)
             )
 
@@ -76,7 +85,8 @@ class Trainer(BasicTrainer):
             else:
                 self.model.eval()
 
-            pred_out = self.model(inp.to(DEVICE))
+            pred_out, pred_edges = self.model(inp.to(DEVICE))
             pred_out = torch.sigmoid(pred_out)
+            pred_edges = torch.sigmoid(pred_edges).squeeze()
 
-            return pred_out
+            return pred_out, pred_edges

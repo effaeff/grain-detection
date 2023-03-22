@@ -268,13 +268,18 @@ class DataProcessor():
         for batch_idx, batch in enumerate(tqdm(self.test_data)):
             inp = batch['F']
             out = batch['T']
-            pred_out = evaluate(inp)
+            pred_out, pred_edges = evaluate(inp)
 
             for image_idx, image in enumerate(pred_out):
                 inp_image = inp[image_idx].permute(1, 2, 0)
                 # inp_image = (inp_image - inp_image.min()) / (inp_image.max() - inp_image.min())
                 out_image = torch.argmax(out[image_idx], dim=0)
                 pred_out_image = torch.argmax(image, dim=0).cpu()
+
+                pred_edges_image = pred_edges[image_idx].cpu()
+
+                out_blur = cv2.GaussianBlur((out_image * 255).astype('uint8'), (5, 5), 0)
+                out_edges = cv2.Canny(out_blur, 100, 200) / 255
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
@@ -290,8 +295,15 @@ class DataProcessor():
                     # cmap='Greys'
                 # )
                 self.plot_results(
-                    [inp_image[:, :, 0], inp_image[:, :, 1], pred_out_image, out_image],
-                    ['Depth', 'Intensity', 'Prediction', 'Target'],
+                    [
+                        inp_image[:, :, 0],
+                        inp_image[:, :, 1],
+                        pred_out_image,
+                        out_image,
+                        pred_edges_image,
+                        out_edges
+                    ],
+                    ['Depth', 'Intensity', 'Prediction', 'Target', 'Predicted edges', 'Target edges'],
                     f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
                 )
 
@@ -369,7 +381,7 @@ class DataProcessor():
             print(f"Boundary accuracy: {np.mean(bacc)} +- {np.std(bacc)}")
 
     def find_border_pxl(self, target, output, idx=0):
-        target = [np.argmax(target.cpu().detach().numpy(), axis = 0)]
+        target = [np.argmax(target.cpu().detach().numpy(), axis=0)]
         target = np.reshape(target, (self.height, self.width))
         plt.imsave('target.png', target)
         target = target.flatten()

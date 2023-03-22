@@ -2,7 +2,8 @@
 
 import shutil
 import misc
-
+# import os
+# os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 from pytorchutils.ahg import AHGModel as AHG
 from pytorchutils.fcn8s import FCNModel as FCN8s
 from pytorchutils.fcn_resnet import FCNModel as ResNet

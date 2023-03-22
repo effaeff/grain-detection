@@ -2,12 +2,12 @@
 
 from pytorchutils.globals import nn
 
-DATA_DIR = '../data/01_raw/measurements'
-PROCESSED_DIR = '../data/02_processed'
-RESULTS_DIR = '../results'
-MODELS_DIR = '../models'
-INFER_DIR = '../data/03_inference'
-AUG_DIR = '../data/04_augmentations'
+DATA_DIR = '/raid/grain_dataset/01_raw/measurements'
+PROCESSED_DIR = '/raid/grain_dataset/02_processed'
+RESULTS_DIR = '/cephfs/grain_dataset/results'
+MODELS_DIR = '/cephfs/grain_dataset/models'
+INFER_DIR = '/raid/grain_dataset/03_inference'
+AUG_DIR = 'raid/grain_dataset/04_augmentations'
 DATA_TYPES = ['depth', 'intensity', 'target']
 DATA_LABELS = ['features', 'target']
 
