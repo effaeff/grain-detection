@@ -20,6 +20,7 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torchvision.transforms import ToTensor, Grayscale, Normalize, Compose
 from torchmetrics import JaccardIndex
+from torchmetrics.classification import BinaryJaccardIndex
 from sklearn.model_selection import train_test_split
 
 class GrainDataset(torch.utils.data.Dataset):
@@ -253,18 +254,21 @@ class DataProcessor():
         """Method to get datasets"""
         return self.train_dataset, self.test_dataset
 
-    def validate(self, evaluate, epoch_idx):
+    def validate(self, evaluate, epoch_idx, train=True):
         """Validation method which uses evaluation method from trainer"""
         print("Start validation...")
 
-        Path(
-            '{}/epoch{}'.format(self.results_dir, epoch_idx)
-        ).mkdir(parents=True, exist_ok=True)
+        if train:
+            Path(
+                '{}/epoch{}'.format(self.results_dir, epoch_idx)
+            ).mkdir(parents=True, exist_ok=True)
 
-        pixel_acc = []
-        border_acc = []
+        # pixel_acc = []
+        # border_acc = []
         iou = []
+        iou_border = []
         jacc = JaccardIndex(num_classes=self.output_size, task='multiclass')
+        jacc_border = BinaryJaccardIndex()
         for batch_idx, batch in enumerate(tqdm(self.test_data)):
             inp = batch['F']
             out = batch['T']
@@ -275,17 +279,31 @@ class DataProcessor():
                 # inp_image = (inp_image - inp_image.min()) / (inp_image.max() - inp_image.min())
                 out_image = torch.argmax(out[image_idx], dim=0)
                 pred_out_image = torch.argmax(image, dim=0).cpu()
-
+                # pred_edges_image = torch.argmax(pred_edges[image_idx], dim=0).cpu()
                 pred_edges_image = pred_edges[image_idx].cpu()
 
-                out_blur = cv2.GaussianBlur((out_image * 255).astype('uint8'), (5, 5), 0)
+                # high = pred_edges_image.max() * 0.32
+                # pred_edges_image[torch.where(pred_edges_image >= high)] = 1
+                # pred_edges_image[torch.where(pred_edges_image < high)] = 0
+
+                # pred_edges_image = torch.argmax(pred_edges[image_idx], dim=0).cpu()
+
+                out_blur = cv2.GaussianBlur((out_image.numpy() * 255).astype('uint8'), (5, 5), 0)
                 out_edges = cv2.Canny(out_blur, 100, 200) / 255
+
+                # pred_blur = cv2.GaussianBlur((pred_out_image.numpy() * 255).astype('uint8'), (5, 5), 0)
+                # pred_edges = cv2.Canny(pred_blur, 100, 200) / 255
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
                 #pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
                 iou.append(jacc(pred_out_image, out_image))
                 #border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+
+                # print(pred_edges_image)
+                # print(out_edges)
+                # quit()
+                iou_border.append(jacc_border(pred_edges_image, torch.from_numpy(out_edges)))
 
                 # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
                 # im_to_save.save(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png')
@@ -294,25 +312,28 @@ class DataProcessor():
                     # pred_out_image,
                     # cmap='Greys'
                 # )
-                self.plot_results(
-                    [
-                        inp_image[:, :, 0],
-                        inp_image[:, :, 1],
-                        pred_out_image,
-                        out_image,
-                        pred_edges_image,
-                        out_edges
-                    ],
-                    ['Depth', 'Intensity', 'Prediction', 'Target', 'Predicted edges', 'Target edges'],
-                    f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
-                )
+                if train:
+                    self.plot_results(
+                        [
+                            inp_image[:, :, 0],
+                            inp_image[:, :, 1],
+                            pred_out_image,
+                            out_image,
+                            pred_edges_image,
+                            out_edges
+                        ],
+                        ['Depth', 'Intensity', 'Prediction', 'Target', 'Pred edges', 'Target edges'],
+                        f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
+                    )
 
         # return 100.0 - np.mean(pixel_acc), np.std(pixel_acc)
-        #return (
-        #    [np.mean(iou), np.mean(pixel_acc), np.mean(border_acc)],
-        #    [np.std(iou), np.std(pixel_acc), np.std(border_acc)]
-        #)
-        return np.mean(iou), np.std(iou)
+        if train:
+            return np.mean(iou), np.std(iou)
+        else:
+            return (
+               [np.mean(iou), np.mean(iou_border)],
+               [np.std(iou), np.std(iou_border)]
+            )
 
     def infer(self, evaluate, infer_dir):
         """Inference method"""
