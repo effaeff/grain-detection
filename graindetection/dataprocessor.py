@@ -313,6 +313,8 @@ class DataProcessor():
                     # cmap='Greys'
                 # )
                 if train:
+                    im_path = f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx:03d}'
+                    Path(im_path).mkdir(parents=True, exist_ok=True)
                     self.plot_results(
                         [
                             inp_image[:, :, 0],
@@ -323,8 +325,15 @@ class DataProcessor():
                             out_edges
                         ],
                         ['Depth', 'Intensity', 'Prediction', 'Target', 'Pred edges', 'Target edges'],
-                        f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png'
+                        f'{im_path}/{save_idx:03d}.png'
                     )
+                    np.save(f'{im_path}/depth.npy', inp_image[:, :, 0])
+                    np.save(f'{im_path}/intensity.npy', inp_image[:, :, 1])
+                    np.save(f'{im_path}/pred.npy', pred_out_image)
+                    np.save(f'{im_path}/target.npy', out_image)
+                    np.save(f'{im_path}/pred_edges.npy', pred_edges_image)
+                    np.save(f'{im_path}/target_edges.npy', out_edges)
+
 
         # return 100.0 - np.mean(pixel_acc), np.std(pixel_acc)
         if train:
