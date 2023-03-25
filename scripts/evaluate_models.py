@@ -20,7 +20,7 @@ def main():
 
     data_processor = DataProcessor(data_config)
 
-    total_dirs = glob(f'{MODELS_DIR}/3fullattn/')
+    total_dirs = glob(f'{MODELS_DIR}/canny/best/')
     # total_dirs.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-1]).group()))
 
     for directory in total_dirs:
@@ -29,8 +29,8 @@ def main():
         checkpoints = glob(f'{directory}*DataParallel*')
         checkpoints.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-2]).group()))
 
-        accuracies = np.zeros((len(checkpoints), 3))
-        stds = np.zeros((len(checkpoints), 3))
+        accuracies = np.zeros((len(checkpoints), 2))
+        stds = np.zeros((len(checkpoints), 2))
         for idx, checkpoint in enumerate(checkpoints):
             epoch = int(re.search(r'\d+', checkpoint.split('_')[-2]).group())
             model = nn.DataParallel(AHGModel(model_config))
@@ -39,13 +39,12 @@ def main():
             state = torch.load(checkpoint)
             model.load_state_dict(state['state_dict'])
             trainer = Trainer(model_config, model, data_processor)
-            accuracy, std = trainer.validate(epoch)
+            accuracy, std = trainer.validate(epoch, train=True)
             accuracies[idx] = accuracy
             stds[idx] = std
             print(
                 f'epoch: {epoch}, iou: {accuracy[0]:.3f} +- {std[0]:.3f}, '
-                f'pacc: {accuracy[1]:.2f} +- {std[1]:.2f}, '
-                f'bpacc: {accuracy[2]:.2f} +- {std[2]:.2f}, '
+                f'border iou: {accuracy[1]:.2f} +- {std[1]:.2f}'
             )
         np.save(f'{directory}accuracy_progression.npy', np.array([accuracies, stds]))
 
