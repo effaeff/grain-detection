@@ -36,8 +36,9 @@ class GrainDataset(torch.utils.data.Dataset):
         self.data_targets = None
         if path_target is not None:
             t_names = sorted(
-                os.listdir(f'{path_target}/1'), key=lambda name: int(os.path.splitext(name)[0])
+                os.listdir(f'{path_target}/1'), key=lambda name: int(re.search('\d+', name).group())
             )
+            # t_names = os.listdir(f'{path_target}/1')
             t_names = [
                 t_name for t_name in t_names
                 if (
@@ -55,11 +56,17 @@ class GrainDataset(torch.utils.data.Dataset):
             # )
 
         f_names = sorted(
-            os.listdir(f'{path_target}/1'), key=lambda name: int(os.path.splitext(name)[0])
+            os.listdir(f'{path_target}/1'), key=lambda name: int(re.search('\d+', name).group())
         )
+        # f_names = os.listdir(f'{path_target}/1')
         if path_target is not None and len(f_names) != len(t_names):
             f_names = t_names
 
+        # self.data_features = np.empty((len(f_names), 2, 256, 256))
+        # for idx, f_name in enumerate(f_names):
+            # print(f_name)
+            # f = np.load(f'{path_features}/1/{f_name}')
+            # self.data_features[idx] = f
         self.data_features = np.array([
             np.load(f'{path_features}/1/{f_name}')
             for f_name in f_names
