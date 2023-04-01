@@ -332,7 +332,7 @@ class DataProcessor():
                             out_edges
                         ],
                         ['Depth', 'Intensity', 'Prediction', 'Target', 'Pred edges', 'Target edges'],
-                        f'{im_path}/{save_idx:03d}.png'
+                        f'{self.results_dir}/epoch{epoch_idx}/{save_idx:03d}.png'
                     )
                     np.save(f'{im_path}/depth.npy', inp_image[:, :, 0])
                     np.save(f'{im_path}/intensity.npy', inp_image[:, :, 1])
