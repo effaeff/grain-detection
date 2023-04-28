@@ -263,20 +263,19 @@ class DataProcessor():
 
     def validate(self, evaluate, epoch_idx, train=True):
         """Validation method which uses evaluation method from trainer"""
-        print("Start validation...")
+        # print("Start validation...")
 
         if train:
             Path(
                 '{}/epoch{}'.format(self.results_dir, epoch_idx)
             ).mkdir(parents=True, exist_ok=True)
 
-        # pixel_acc = []
-        # border_acc = []
+        pacc = []
         iou = []
-        iou_border = []
+        bpacc = []
         jacc = JaccardIndex(num_classes=self.output_size, task='multiclass')
-        jacc_border = BinaryJaccardIndex()
-        for batch_idx, batch in enumerate(tqdm(self.test_data)):
+        pbar = tqdm(self.test_data, desc='Validation', unit='batch')
+        for batch_idx, batch in enumerate(pbar):
             inp = batch['F']
             out = batch['T']
             pred_out, pred_edges = evaluate(inp)
@@ -303,14 +302,14 @@ class DataProcessor():
 
                 save_idx = batch_idx * self.batch_size + image_idx
 
-                #pixel_acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
-                iou.append(jacc(pred_out_image, out_image))
-                #border_acc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+                pacc.append((out_image == pred_out_image).float().mean().item() * 100.0)
+                iou.append(jacc(pred_out_image, out_image) * 100.0)
+                bpacc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
 
                 # print(pred_edges_image)
                 # print(out_edges)
                 # quit()
-                iou_border.append(jacc_border(pred_edges_image, torch.from_numpy(out_edges)))
+                # iou_border.append(jacc_border(pred_edges_image, torch.from_numpy(out_edges)))
 
                 # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
                 # im_to_save.save(f'{self.results_dir}/epoch{epoch_idx}/pred_{save_idx}.png')
@@ -342,38 +341,34 @@ class DataProcessor():
                     np.save(f'{im_path}/target_edges.npy', out_edges)
 
 
-        # return 100.0 - np.mean(pixel_acc), np.std(pixel_acc)
-        if train:
-            return np.mean(iou), np.std(iou)
-        else:
-            return (
-               [np.mean(iou), np.mean(iou_border)],
-               [np.std(iou), np.std(iou_border)]
-            )
+        return (
+            np.mean([np.mean(iou), np.mean(pacc), np.mean(bpacc)]),
+            np.mean([np.std(iou), np.std(pacc), np.std(bpacc)])
+        )
 
     def infer(self, evaluate, infer_dir):
         """Inference method"""
         Path('{}/predictions'.format(infer_dir[0])).mkdir(parents=True, exist_ok=True)
 
-        # filenames = [
-            # [file for file in os.listdir(infer_dir[0]) if file.endswith(f'{type}.txt')]
-            # for type in self.data_types
-        # ]
+        filenames = [
+            [file for file in os.listdir(infer_dir[0]) if type in file]
+            for type in self.data_types
+        ]
 
         # Sort measurements numerically
-        # for type_idx, __ in enumerate(filenames):
-            # filenames[type_idx].sort(key=lambda f: int(re.sub(r'\D', '', f)))
+        for type_idx, __ in enumerate(filenames):
+            filenames[type_idx].sort(key=lambda f: int(re.sub(r'\D', '', f)))
 
         # Remove empty lists
         # filenames = [filename for filename in filenames if filename]
 
-        filenames = [["Alpha_98700_1700x629.txt"]]
+        # filenames = [["Alpha_98700_1700x629.txt"]]
 
         print(f"Performing inference using files:\n{filenames}")
 
         if not any(Path(f'{infer_dir[0]}/test/{self.data_labels[0]}/1').iterdir()):
-            self.data_to_images(filenames, infer_dir[0], f'{infer_dir[0]}/test')
-            # self.data_to_images(np.transpose(filenames), infer_dir[0], f'{infer_dir[0]}/test')
+            # self.data_to_images(filenames, infer_dir[0], f'{infer_dir[0]}/test')
+            self.data_to_images(np.transpose(filenames), infer_dir[0], f'{infer_dir[0]}/test')
 
         target_available = any(Path(f'{infer_dir[0]}/test/{self.data_types[-1]}/1').iterdir())
 
@@ -383,54 +378,86 @@ class DataProcessor():
         )
         infer_data = DataLoader(infer_dataset, self.batch_size, shuffle=False, num_workers=0)
 
-        acc = []
-        bacc = []
-        for batch_idx, batch in enumerate(infer_data):
+        pacc = []
+        iou = []
+        bpacc = []
+        jacc = JaccardIndex(num_classes=self.output_size, task='multiclass')
+        pbar = tqdm(infer_data, desc='Inference', unit='batch')
+        for batch_idx, batch in enumerate(pbar):
             inp = batch['F']
             out = batch['T'] if target_available else None
-            pred_out = evaluate(inp)
+            pred_out, pred_edges = evaluate(inp)
+
             for image_idx, image in enumerate(pred_out):
-                inp_image = inp[image_idx].permute(1, 2, 0)
-                inp_image = (inp_image - inp_image.min()) / (inp_image.max() - inp_image.min())
-                pred_out_image = torch.argmax(image, dim=0).cpu()
                 save_idx = batch_idx * self.batch_size + image_idx
+                im_path = f'{infer_dir[0]}/predictions/pred_{save_idx:03d}'
+                Path(im_path).mkdir(parents=True, exist_ok=True)
+
+                inp_image = inp[image_idx].permute(1, 2, 0)
+                pred_out_image = torch.argmax(image, dim=0).cpu()
+                pred_edges_image = pred_edges[image_idx].cpu()
 
                 if out is not None:
                     out_image = torch.argmax(out[image_idx], dim=0)
-                    acc.append((out_image == pred_out_image).float().mean().item() * 100.0)
-                    bacc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
+                    out_blur = cv2.GaussianBlur((out_image.numpy() * 255).astype('uint8'), (5, 5), 0)
+                    out_edges = cv2.Canny(out_blur, 100, 200) / 255
+
+                    pacc.append((out_image == pred_out_image).float().mean().item() * 100.0)
+                    iou.append(jacc(pred_out_image, out_image) * 100.0)
+                    bpacc.append(self.calc_border_acc(out[image_idx], image, save_idx) * 100.0)
 
                     self.plot_results(
-                        [inp_image, pred_out_image, out_image],
-                        ['Input', 'Output', 'Target'],
-                        f'{infer_dir[0]}/predictions/pred_{save_idx}.png',
+                        [
+                            inp_image[:, :, 0],
+                            inp_image[:, :, 1],
+                            pred_out_image,
+                            out_image,
+                            pred_edges_image,
+                            out_edges
+                        ],
+                        ['Depth', 'Intensity', 'Prediction', 'Target', 'Pred edges', 'Target edges'],
+                        f'{infer_dir[0]}/predictions/{save_idx:03d}.png'
                     )
+                    np.save(f'{im_path}/target.npy', out_image)
+                    np.save(f'{im_path}/target_edges.npy', out_edges)
                 else:
-                    plt.imsave(
-                        f'{infer_dir[0]}/predictions/pred_{save_idx}.png',
-                        pred_out_image,
-                        cmap='Greys'
+                    self.plot_results(
+                        [
+                            inp_image[:, :, 0],
+                            inp_image[:, :, 1],
+                            pred_out_image,
+                            pred_edges_image,
+                        ],
+                        ['Depth', 'Intensity', 'Prediction', 'Pred edges'],
+                        f'{infer_dir[0]}/predictions/{save_idx:03d}.png'
                     )
-                    # im_to_save = Image.fromarray(np.uint8(pred_out_image * 255))
-                    # im_to_save.save(f'{infer_dir[0]}/predictions/pred_{save_idx}.png')
-        if acc:
-            print(f"Accuracy: {np.mean(acc)} +- {np.std(acc)}")
-            print(f"Boundary accuracy: {np.mean(bacc)} +- {np.std(bacc)}")
+
+                np.save(f'{im_path}/depth.npy', inp_image[:, :, 0])
+                np.save(f'{im_path}/intensity.npy', inp_image[:, :, 1])
+                np.save(f'{im_path}/pred.npy', pred_out_image)
+                np.save(f'{im_path}/pred_edges.npy', pred_edges_image)
+
+        if pacc:
+            print(
+                f'pacc: {np.mean(pacc):.2f} +- {np.std(pacc):.2f}\t'
+                f'iou: {np.mean(iou):.2f} +- {np.std(iou):.2f}\t'
+                f'bpacc: {np.mean(bpacc):.2f} +- {np.std(bpacc):.2f}'
+            )
 
     def find_border_pxl(self, target, output, idx=0):
         target = [np.argmax(target.cpu().detach().numpy(), axis=0)]
         target = np.reshape(target, (self.height, self.width))
-        plt.imsave('target.png', target)
+        plt.imsave(f'{self.results_dir}/{idx}_target.png', target)
         target = target.flatten()
 
-        img = cv2.imread('target.png')
+        img = cv2.imread(f'{self.results_dir}/{idx}_target.png')
         img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         img_gray = np.where(img_gray > 130, 30, 215)
         img_gray = img_gray.astype(np.uint8)
         ret, thresh = cv2.threshold(img_gray, 170, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
         contours, hierarchy = cv2.findContours(thresh, 2, 1)
         bmask = np.ones(img.shape[:2], dtype="uint8")
-        cv2.drawContours(bmask, contours, -1, 0, 8)
+        cv2.drawContours(bmask, contours, -1, 0, 5)
 
         bsave = Image.fromarray(np.uint8(bmask * 255))
         # bsave.save(f"border_{idx}.png")
