@@ -27,8 +27,10 @@ def main():
     old_aug_t = glob(f'{PROCESSED_DIR}/train/target/1/*_aug.npy')
     old_vqgan_f = glob(f'{PROCESSED_DIR}/train/features/1/*_vqgan.npy')
     old_vqgan_t = glob(f'{PROCESSED_DIR}/train/target/1/*_vqgan.npy')
+    old_diff_f = glob(f'{PROCESSED_DIR}/train/features/1/*_diff.npy')
+    old_diff_t = glob(f'{PROCESSED_DIR}/train/target/1/*_diff.npy')
 
-    for f_list in [old_aug_f, old_aug_t, old_vqgan_f, old_vqgan_t]:
+    for f_list in [old_aug_f, old_aug_t, old_vqgan_f, old_vqgan_t, old_diff_f, old_diff_t]:
         for fname in f_list:
             os.remove(fname)
 
@@ -41,18 +43,25 @@ def main():
     aug_names = sorted(
         os.listdir(f'{AUG_DIR}/features_aug'), key=lambda x: int(re.search('\d+', x).group())
     )
-    vqgan_names = sorted(
-        os.listdir(f'{AUG_DIR}/features_vqgan'), key=lambda x: int(re.search('\d+', x).group())
+    # vqgan_names = sorted(
+        # os.listdir(f'{AUG_DIR}/features_vqgan'), key=lambda x: int(re.search('\d+', x).group())
+    # )
+    diff_names = sorted(
+        os.listdir(f'{AUG_DIR}/features_diff'), key=lambda x: int(re.search('\d+', x).group())
     )
 
     print("Copy augmentations based on image manupulations...")
     for fname in tqdm(aug_names[:augments]):
         shutil.copyfile(f'{AUG_DIR}/features_aug/{fname}', f'{PROCESSED_DIR}/train/features/1/{fname}')
         shutil.copyfile(f'{AUG_DIR}/target_aug/{fname}', f'{PROCESSED_DIR}/train/target/1/{fname}')
-    print("Copy VQ-GAN samples...")
-    for fname in tqdm(vqgan_names[:augments]):
-        shutil.copyfile(f'{AUG_DIR}/features_vqgan/{fname}', f'{PROCESSED_DIR}/train/features/1/{fname}')
-        shutil.copyfile(f'{AUG_DIR}/target_vqgan/{fname}', f'{PROCESSED_DIR}/train/target/1/{fname}')
+    # print("Copy VQ-GAN samples...")
+    # for fname in tqdm(vqgan_names[:augments]):
+        # shutil.copyfile(f'{AUG_DIR}/features_vqgan/{fname}', f'{PROCESSED_DIR}/train/features/1/{fname}')
+        # shutil.copyfile(f'{AUG_DIR}/target_vqgan/{fname}', f'{PROCESSED_DIR}/train/target/1/{fname}')
+    print("Copy diffusion samples...")
+    for fname in tqdm(diff_names[:augments]):
+        shutil.copyfile(f'{AUG_DIR}/features_diff/{fname}', f'{PROCESSED_DIR}/train/features/1/{fname}')
+        shutil.copyfile(f'{AUG_DIR}/target_diff/{fname}', f'{PROCESSED_DIR}/train/target/1/{fname}')
 
 if __name__ == "__main__":
     main()
