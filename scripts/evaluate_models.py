@@ -4,10 +4,9 @@ import re
 from glob import glob
 import numpy as np
 import misc
+import pathlib
 
 from pytorchutils.globals import torch, nn
-# from pytorchutils.fcn8s import FCNModel
-from pytorchutils.fcn_resnet import FCNModel
 from pytorchutils.ahg import AHGModel
 from graindetection.dataprocessor import DataProcessor
 from graindetection.trainer import Trainer
@@ -20,33 +19,42 @@ def main():
 
     data_processor = DataProcessor(data_config)
 
-    total_dirs = glob(f'{MODELS_DIR}/canny/best/')
+    total_dirs = glob(f'/cephfs/grain_dataset/models/opt_transfer2/')
     # total_dirs.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-1]).group()))
+
+    best = 0
 
     for directory in total_dirs:
         print(f"Processing model directory: {directory}")
-        # n_measurements = int(re.search(r'\d+', directory.split('_')[-1]).group())
+        n_measurements = int(re.search(r'\d+', directory.split('_')[-1]).group())
         checkpoints = glob(f'{directory}*DataParallel*')
         checkpoints.sort(key=lambda f: int(re.search(r'\d+', f.split('_')[-2]).group()))
 
-        accuracies = np.zeros((len(checkpoints), 2))
-        stds = np.zeros((len(checkpoints), 2))
+        accuracies = np.zeros(len(checkpoints))
+        stds = np.zeros(len(checkpoints))
         for idx, checkpoint in enumerate(checkpoints):
             epoch = int(re.search(r'\d+', checkpoint.split('_')[-2]).group())
             model = nn.DataParallel(AHGModel(model_config))
-            # model = FCNModel(model_config)
             print(f"checkpoint file: {checkpoint}")
             state = torch.load(checkpoint)
             model.load_state_dict(state['state_dict'])
             trainer = Trainer(model_config, model, data_processor)
-            accuracy, std = trainer.validate(epoch, train=True)
+            accuracy, std = trainer.validate(epoch, train=False)
             accuracies[idx] = accuracy
             stds[idx] = std
-            print(
-                f'epoch: {epoch}, iou: {accuracy[0]:.3f} +- {std[0]:.3f}, '
-                f'border iou: {accuracy[1]:.2f} +- {std[1]:.2f}'
-            )
+            print(f'epoch: {epoch}, accuracy: {accuracy:.2f} +- {std:.2f}')
         np.save(f'{directory}accuracy_progression.npy', np.array([accuracies, stds]))
+        best = np.argmax(accuracies) + 176
+        # best = 176
+
+        pathlib.Path(f'{directory}/best').mkdir(parents=True, exist_ok=True)
+        checkpoint = f'{directory}/DataParallel_0_epoch{best}_checkpoint.pth.tar'
+        model = nn.DataParallel(AHGModel(model_config))
+        print(f"checkpoint file: {checkpoint}")
+        state = torch.load(checkpoint)
+        model.load_state_dict(state['state_dict'])
+        trainer = Trainer(model_config, model, data_processor)
+        __, __ = trainer.validate(best, train=True)
 
 if __name__ == '__main__':
     misc.to_local_dir(__file__)
