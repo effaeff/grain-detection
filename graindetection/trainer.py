@@ -26,7 +26,7 @@ class Trainer(BasicTrainer):
                 "Error: No nb_batches_fn defined in preprocessor. "
                 "This attribute is required by the training routine."
             )
-        pbar = tqdm(batches, desc=f'Epoch: {epoch_idx}', unit='batch')
+        pbar = tqdm(batches, desc=f'Epoch {epoch_idx}', unit='batch')
         for batch_idx, batch in enumerate(pbar):
             # batch = batches[batch_idx]
             inp = batch['F']
