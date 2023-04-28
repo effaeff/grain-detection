@@ -5,9 +5,6 @@ import misc
 # import os
 # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 from pytorchutils.ahg import AHGModel as AHG
-from pytorchutils.fcn8s import FCNModel as FCN8s
-from pytorchutils.fcn_resnet import FCNModel as ResNet
-# from pytorchutils.fcn_resnet import FCNModel as ResNet
 from pytorchutils.globals import nn
 from graindetection.dataprocessor import DataProcessor
 from graindetection.trainer import Trainer
@@ -39,13 +36,11 @@ def main():
 
     data_processor = DataProcessor(data_config)
     model = nn.DataParallel(AHG(model_config))
-    # model = ResNet(model_config)
-    model.eval()
     trainer = Trainer(model_config, model, data_processor)
     trainer.get_batches_fn = data_processor.get_batches
     # acc = trainer.validate(130)
     # print(f"Validation accuracy: {acc}")
-    trainer.train(validate_every=5, save_every=5)
+    trainer.train(validate_every=5, save_every=1)
     # trainer.infer(INFER_DIR)
 
 if __name__ == '__main__':
